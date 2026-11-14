@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { Link, useParams } from "@tanstack/react-router";
 
 import {
@@ -7,16 +9,34 @@ import {
   ShieldCheck,
 } from "lucide-react";
 
+import axios from "axios";
+
 import { Button } from "@/components/ui/button";
 
 import Header from "@/components/layout/Header";
 
 import { useNFTById } from "@/features/nft/hooks/useNFTById";
 
+import { useAddCartItem } from "@/features/cart/hooks/useCartMutations";
+
+function getErrorMessage(error: unknown): string {
+  if (axios.isAxiosError<{ message?: string }>(error)) {
+    return (
+      error.response?.data?.message ??
+      "Não foi possível adicionar o NFT ao carrinho."
+    );
+  }
+
+  return "Não foi possível adicionar o NFT ao carrinho.";
+}
+
 export default function NFTDetailsPage() {
   const { nftId } = useParams({
     from: "/nft/$nftId",
   });
+
+  const [quantity, setQuantity] = useState(1);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const {
     data: nft,
@@ -26,13 +46,45 @@ export default function NFTDetailsPage() {
     refetch,
   } = useNFTById(nftId);
 
+  const addCartMutation = useAddCartItem();
+
+  async function handleAddToCart() {
+    if (!nft) {
+      return;
+    }
+
+    setSuccessMessage("");
+
+    try {
+      await addCartMutation.mutateAsync({
+        nftId: nft.id,
+        quantity,
+      });
+
+      setSuccessMessage(
+        `${quantity} unidade(s) de ${nft.name} adicionada(s) ao carrinho.`,
+      );
+    } catch {
+      // O erro será apresentado pelo estado da mutation.
+    }
+  }
+
+  const stock = nft?.availableQuantity ?? 0;
+
+  const isOutOfStock = stock === 0;
+
+  const canAddToCart =
+    !isOutOfStock &&
+    quantity >= 1 &&
+    quantity <= stock &&
+    !addCartMutation.isPending;
+
   return (
     <>
       <Header />
 
       <main className="min-h-screen bg-kurio-background px-4 py-8 text-kurio-text sm:px-6 lg:px-8 lg:py-12">
         <div className="mx-auto max-w-7xl">
-          {/* VOLTAR */}
           <Link
             to="/"
             className="mb-8 inline-flex items-center gap-2 text-sm text-kurio-text-muted transition-colors hover:text-kurio-primary"
@@ -41,7 +93,6 @@ export default function NFTDetailsPage() {
             Voltar ao catálogo
           </Link>
 
-          {/* CARREGAMENTO */}
           {isPending && (
             <div
               role="status"
@@ -51,7 +102,6 @@ export default function NFTDetailsPage() {
             </div>
           )}
 
-          {/* ERRO */}
           {isError && (
             <div
               role="alert"
@@ -75,10 +125,9 @@ export default function NFTDetailsPage() {
             </div>
           )}
 
-          {/* DETALHES */}
           {nft && (
             <div className="grid gap-8 lg:grid-cols-2 lg:gap-14">
-              {/* IMAGEM */}
+              
               <section aria-label={`Imagem de ${nft.name}`}>
                 <div className="overflow-hidden rounded-2xl border border-kurio-border bg-kurio-surface">
                   <img
@@ -89,7 +138,7 @@ export default function NFTDetailsPage() {
                 </div>
               </section>
 
-              {/* INFORMAÇÕES */}
+              
               <section className="flex flex-col">
                 <div className="mb-6">
                   <p className="mb-3 text-sm text-kurio-primary">
@@ -114,7 +163,7 @@ export default function NFTDetailsPage() {
                   </p>
                 </div>
 
-                {/* DADOS */}
+               
                 <div className="mb-6 grid grid-cols-2 gap-4">
                   <div className="rounded-xl border border-kurio-border bg-kurio-surface p-4">
                     <p className="mb-2 text-xs text-kurio-text-muted">
@@ -137,7 +186,6 @@ export default function NFTDetailsPage() {
                   </div>
                 </div>
 
-                {/* PREÇO */}
                 <div className="mb-6 rounded-2xl border border-kurio-border bg-kurio-surface p-6">
                   <p className="mb-2 text-sm text-kurio-text-muted">
                     Preço atual
@@ -148,27 +196,100 @@ export default function NFTDetailsPage() {
                   </p>
 
                   <p className="mt-3 text-xs text-kurio-text-muted">
-                    {nft.availableQuantity} unidade(s) disponíveis
+                    {stock} unidade(s) disponíveis
                   </p>
                 </div>
 
-                {/* AÇÕES */}
+                
+                <div className="mb-6">
+                  <label
+                    htmlFor="nft-quantity"
+                    className="mb-3 block text-sm font-semibold"
+                  >
+                    Quantidade
+                  </label>
+
+                  <div className="inline-flex items-center overflow-hidden rounded-xl border border-kurio-border bg-kurio-surface">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQuantity((previous) =>
+                          Math.max(1, previous - 1),
+                        )
+                      }
+                      disabled={
+                        quantity <= 1 ||
+                        addCartMutation.isPending
+                      }
+                      aria-label="Diminuir quantidade"
+                      className="h-11 w-12 text-lg transition-colors hover:bg-kurio-surface-light disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      −
+                    </button>
+
+                    <output
+                      id="nft-quantity"
+                      className="flex h-11 min-w-12 items-center justify-center border-x border-kurio-border px-3 text-sm font-bold"
+                    >
+                      {quantity}
+                    </output>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setQuantity((previous) =>
+                          Math.min(stock, previous + 1),
+                        )
+                      }
+                      disabled={
+                        quantity >= stock ||
+                        addCartMutation.isPending
+                      }
+                      aria-label="Aumentar quantidade"
+                      className="h-11 w-12 text-lg transition-colors hover:bg-kurio-surface-light disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                
                 <div className="space-y-4">
                   <Button
                     type="button"
-                    disabled
+                    onClick={handleAddToCart}
+                    disabled={!canAddToCart}
                     className="h-12 w-full bg-kurio-primary text-kurio-background hover:bg-kurio-primary-hover"
                   >
                     <ShoppingCart size={18} />
-                    Adicionar ao carrinho
+
+                    {addCartMutation.isPending
+                      ? "Adicionando..."
+                      : isOutOfStock
+                        ? "NFT esgotado"
+                        : "Adicionar ao carrinho"}
                   </Button>
 
-                  <p className="text-center text-xs text-kurio-text-muted">
-                    Carrinho disponível na próxima etapa.
-                  </p>
+                  {successMessage && (
+                    <p
+                      role="status"
+                      className="rounded-lg border border-green-700/50 bg-green-950/30 p-3 text-center text-sm text-green-400"
+                    >
+                      {successMessage}
+                    </p>
+                  )}
+
+                  {addCartMutation.isError && (
+                    <p
+                      role="alert"
+                      className="rounded-lg border border-red-700/50 bg-red-950/30 p-3 text-center text-sm text-red-400"
+                    >
+                      {getErrorMessage(addCartMutation.error)}
+                    </p>
+                  )}
                 </div>
 
-                {/* INFORMAÇÃO */}
+           
                 <div className="mt-8 flex items-start gap-3 border-t border-kurio-border pt-6">
                   <ShieldCheck
                     size={20}
