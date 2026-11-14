@@ -1,3 +1,5 @@
+export type NFTTab = "all" | "new" | "trending";
+
 export interface NFT {
   id: string;
   name: string;
@@ -10,6 +12,9 @@ export interface NFT {
   network: string;
   availableQuantity: number;
   version: number;
+
+  createdAt: string;
+  popularityScore: number;
 }
 
 export type NFTSort =
@@ -23,6 +28,7 @@ export interface NFTFilters {
   category?: string;
   collection?: string;
   sort?: NFTSort;
+  tab?: NFTTab;
   page?: number;
   limit?: number;
 }

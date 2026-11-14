@@ -3,6 +3,7 @@ import { http, HttpResponse } from "msw";
 import type {
   NFT,
   NFTSort,
+  NFTTab,
 } from "@/features/nft/types/nft.types";
 
 import { initialNFTs } from "../fixtures/nfts";
@@ -11,11 +12,22 @@ const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 6;
 const MAX_LIMIT = 50;
 
+const TRENDING_THRESHOLD = 90;
+const NEW_RELEASE_DAYS = 7;
+
+const MOCK_CURRENT_DATE = new Date("2026-11-14T12:00:00Z");
+
 const validSortOptions: NFTSort[] = [
   "newest",
   "price-asc",
   "price-desc",
   "name-asc",
+];
+
+const validTabOptions: NFTTab[] = [
+  "all",
+  "new",
+  "trending",
 ];
 
 function normalizeText(value: string): string {
@@ -47,13 +59,37 @@ function comparePrices(
   first: NFT,
   second: NFT,
 ): number {
-  const firstPrice = Number(first.price);
-  const secondPrice = Number(second.price);
+  return Number(first.price) - Number(second.price);
+}
 
-  if (firstPrice < secondPrice) return -1;
-  if (firstPrice > secondPrice) return 1;
+function compareNewest(
+  first: NFT,
+  second: NFT,
+): number {
+  return (
+    new Date(second.createdAt).getTime() -
+    new Date(first.createdAt).getTime()
+  );
+}
 
-  return 0;
+function comparePopularity(
+  first: NFT,
+  second: NFT,
+): number {
+  return second.popularityScore - first.popularityScore;
+}
+
+function isNewRelease(nft: NFT): boolean {
+  const createdAt = new Date(nft.createdAt).getTime();
+  const currentDate = MOCK_CURRENT_DATE.getTime();
+
+  const sevenDaysInMilliseconds =
+    NEW_RELEASE_DAYS * 24 * 60 * 60 * 1000;
+
+  return (
+    createdAt <= currentDate &&
+    createdAt >= currentDate - sevenDaysInMilliseconds
+  );
 }
 
 export const nftHandlers = [
@@ -80,6 +116,15 @@ export const nftHandlers = [
     )
       ? (requestedSort as NFTSort)
       : "newest";
+
+    const requestedTab =
+      url.searchParams.get("tab") ?? "all";
+
+    const tab: NFTTab = validTabOptions.includes(
+      requestedTab as NFTTab,
+    )
+      ? (requestedTab as NFTTab)
+      : "all";
 
     const page = parsePositiveInteger(
       url.searchParams.get("page"),
@@ -120,6 +165,22 @@ export const nftHandlers = [
       );
     }
 
+    switch (tab) {
+      case "new":
+        filteredNFTs = filteredNFTs.filter(isNewRelease);
+        break;
+
+      case "trending":
+        filteredNFTs = filteredNFTs.filter(
+          (nft) => nft.popularityScore >= TRENDING_THRESHOLD,
+        );
+        break;
+
+      case "all":
+      default:
+        break;
+    }
+
     switch (sort) {
       case "price-asc":
         filteredNFTs.sort(comparePrices);
@@ -137,9 +198,11 @@ export const nftHandlers = [
 
       case "newest":
       default:
-        filteredNFTs.sort((a, b) =>
-          b.id.localeCompare(a.id),
-        );
+        if (tab === "trending") {
+          filteredNFTs.sort(comparePopularity);
+        } else {
+          filteredNFTs.sort(compareNewest);
+        }
         break;
     }
 

@@ -11,6 +11,7 @@ import NotFoundPage from "@/pages/NotFoundPage";
 import type {
   NFTFilters,
   NFTSort,
+  NFTTab,
 } from "@/features/nft/types/nft.types";
 
 const validSortOptions: NFTSort[] = [
@@ -18,6 +19,12 @@ const validSortOptions: NFTSort[] = [
   "price-asc",
   "price-desc",
   "name-asc",
+];
+
+const validTabOptions: NFTTab[] = [
+  "all",
+  "new",
+  "trending",
 ];
 
 function parsePositiveInteger(
@@ -50,6 +57,14 @@ function validateNFTSearch(
       ? (requestedSort as NFTSort)
       : "newest";
 
+  const requestedTab = search.tab;
+
+  const tab: NFTTab =
+    typeof requestedTab === "string" &&
+    validTabOptions.includes(requestedTab as NFTTab)
+      ? (requestedTab as NFTTab)
+      : "all";
+
   return {
     search:
       typeof search.search === "string"
@@ -67,6 +82,8 @@ function validateNFTSearch(
         : "",
 
     sort,
+
+    tab,
 
     page: parsePositiveInteger(search.page, 1),
 

@@ -1,9 +1,6 @@
 import { useState } from "react";
 
-import {
-  useNavigate,
-  useSearch,
-} from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
 
@@ -12,13 +9,15 @@ import { useNFTs } from "@/features/nft/hooks/useNFTs";
 import type {
   NFTFilters,
   NFTSort,
+  NFTTab,
 } from "@/features/nft/types/nft.types";
 
 import Header from "@/components/layout/Header";
 import HeroBanner from "@/components/home/HeroBanner";
-import NFTGrid from "@/components/nft/NFTGrid";
-import MobileSearchBar from "@/components/home/MobileSearchBar";
+import CatalogSearch from "@/components/home/CatalogSearch";
 import MobileCatalogFilters from "@/components/home/MobileCatalogFilters";
+import CatalogTabs from "@/components/home/CatalogTabs";
+import NFTGrid from "@/components/nft/NFTGrid";
 
 const categories = [
   { label: "Todas as categorias", value: "" },
@@ -39,10 +38,6 @@ export default function HomePage() {
 
   const filters = useSearch({ from: "/" });
 
-  const [searchInput, setSearchInput] = useState(
-    filters.search ?? "",
-  );
-
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   const {
@@ -55,15 +50,9 @@ export default function HomePage() {
     isPlaceholderData,
   } = useNFTs(filters);
 
-  function submitSearch(){
-    updateFilters({
-      search: searchInput.trim(),
-    })
-  }
-
-  function updateFilters(
-    updates: Partial<NFTFilters>,
-  ) {
+  // Atualiza os filtros na URL.
+  // Ao modificar um filtro, volta para a primeira página.
+  function updateFilters(updates: Partial<NFTFilters>) {
     navigate({
       search: (previous) => ({
         ...previous,
@@ -73,258 +62,265 @@ export default function HomePage() {
     });
   }
 
-  function handleSearch(
-    event: React.FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault();
-    submitSearch();
+  // Recebe a busca do CatalogSearch.
+  function handleCatalogSearch(value: string) {
+    updateFilters({
+      search: value,
+    });
   }
 
-  function handleClearFilters() {
-    setSearchInput("");
+  // Altera a aba selecionada.
+  function handleTabChange(tab: NFTTab) {
+    updateFilters({
+      tab,
+      page: 1,
+    });
+  }
 
+  // Limpa os filtros e restaura o catálogo.
+  function handleClearFilters() {
     navigate({
       search: {
         search: "",
         category: "",
         collection: "",
         sort: "newest",
+        tab: "all",
         page: 1,
         limit: 6,
       },
     });
   }
 
+  const activeTab: NFTTab = filters.tab ?? "all";
+
   const currentPage = filters.page ?? 1;
+
   const totalPages = data?.totalPages ?? 0;
 
-  if (isPending) {
-    return (
-      <main className="min-h-screen bg-[#140D0A] p-10 text-white">
-        <p>Carregando NFTs...</p>
-      </main>
-    );
-  }
-
-  if (isError) {
-    return (
-      <main className="min-h-screen bg-[#140D0A] p-10 text-white">
-        <h1 className="mb-4 text-2xl font-bold">
-          Erro ao carregar NFTs
-        </h1>
-
-        <p className="mb-4 text-red-400">
-          {error.message}
-        </p>
-
-        <Button onClick={() => refetch()}>
-          Tentar novamente
-        </Button>
-      </main>
-    );
-  }
-
   return (
-<>
-  <Header />
-    <MobileSearchBar 
-      value={searchInput}
-      onChange={setSearchInput}
-      onSearch={submitSearch}
-      onOpenFilters={() => setMobileFiltersOpen(true)}
-    />
+    <>
+      <Header />
 
-    <MobileCatalogFilters 
-      open={mobileFiltersOpen}
-      filters={filters}
-      onClose={() => setMobileFiltersOpen(false)}
-      onUpdateFilters={updateFilters}
-      onClearFilters={handleClearFilters}  
-    />
-    <HeroBanner />
+      <CatalogSearch
+        key={filters.search ?? ""}
+        initialSearch={filters.search ?? ""}
+        onSearch={handleCatalogSearch}
+        onOpenFilters={() => setMobileFiltersOpen(true)}
+      />
 
-<main className="min-h-screen bg-[#140D0A] px-6 py-10 text-white">
-      <div className="mx-auto max-w-7xl">
-        <header className="mb-10">
-          <h1 className="mb-3 text-4xl font-bold text-[#D58B48]">
-            KURIO NFT MARKETPLACE
-          </h1>
+      <MobileCatalogFilters
+        open={mobileFiltersOpen}
+        filters={filters}
+        onClose={() => setMobileFiltersOpen(false)}
+        onUpdateFilters={updateFilters}
+        onClearFilters={handleClearFilters}
+      />
 
-          <p className="text-gray-400">
-            Explore nossa coleção de NFTs exclusivos.
-          </p>
-        </header>
+      <HeroBanner />
 
-        <form
-          onSubmit={handleSearch}
-          className="mb-6 hidden flex-col gap-3 lg:flex lg:flex-row"
-        >
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(event) =>
-              setSearchInput(event.target.value)
-            }
-            placeholder="Buscar NFTs..."
-            className="w-full rounded-lg border border-white/15 bg-[#241813] px-4 py-3 text-white outline-none focus:border-[#D58B48]"
+      <main
+        id="catalog"
+        className="min-h-screen bg-kurio-background px-4 py-8 text-kurio-text sm:px-6 lg:px-8 lg:py-12"
+      >
+        <div className="mx-auto max-w-7xl">
+          <section
+            aria-label="Filtros do catálogo"
+            className="mb-8 hidden gap-4 lg:grid lg:grid-cols-4"
+          >
+            <select
+              aria-label="Filtrar por categoria"
+              value={filters.category ?? ""}
+              onChange={(event) =>
+                updateFilters({
+                  category: event.target.value,
+                })
+              }
+              className="rounded-lg border border-kurio-border bg-kurio-surface px-4 py-3 text-kurio-text"
+            >
+              {categories.map((category) => (
+                <option
+                  key={category.value}
+                  value={category.value}
+                >
+                  {category.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              aria-label="Filtrar por coleção"
+              value={filters.collection ?? ""}
+              onChange={(event) =>
+                updateFilters({
+                  collection: event.target.value,
+                })
+              }
+              className="rounded-lg border border-kurio-border bg-kurio-surface px-4 py-3 text-kurio-text"
+            >
+              {collections.map((collection) => (
+                <option
+                  key={collection.value}
+                  value={collection.value}
+                >
+                  {collection.label}
+                </option>
+              ))}
+            </select>
+
+            <select
+              aria-label="Ordenar NFTs"
+              value={filters.sort ?? "newest"}
+              onChange={(event) =>
+                updateFilters({
+                  sort: event.target.value as NFTSort,
+                })
+              }
+              className="rounded-lg border border-kurio-border bg-kurio-surface px-4 py-3 text-kurio-text"
+            >
+              <option value="newest">Mais recentes</option>
+              <option value="price-asc">Menor preço</option>
+              <option value="price-desc">Maior preço</option>
+              <option value="name-asc">Nome (A–Z)</option>
+            </select>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleClearFilters}
+              className="border-kurio-border bg-transparent text-kurio-text hover:bg-kurio-surface hover:text-kurio-text"
+            >
+              Limpar filtros
+            </Button>
+          </section>
+
+          <CatalogTabs
+            activeTab={activeTab}
+            onTabChange={handleTabChange}
           />
 
-          <Button
-            type="submit"
-            className="bg-[#D58B48] text-[#140D0A] hover:bg-[#E5A365]"
-          >
-            Buscar
-          </Button>
-        </form>
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold md:text-2xl">
+              NFTs disponíveis
+            </h2>
 
-        <section className="mb-8 hidden gap-4 lg:grid lg:grid-cols-4">
-          <select
-            aria-label="Filtrar por categoria"
-            value={filters.category ?? ""}
-            onChange={(event) =>
-              updateFilters({
-                category: event.target.value,
-              })
-            }
-            className="rounded-lg border border-white/15 bg-[#241813] px-4 py-3 text-white"
-          >
-            {categories.map((category) => (
-              <option
-                key={category.value}
-                value={category.value}
-              >
-                {category.label}
-              </option>
-            ))}
-          </select>
+            <div className="flex items-center gap-3 text-xs text-kurio-text-muted sm:text-sm">
+              {data && (
+                <span>{data.total} resultado(s)</span>
+              )}
 
-          <select
-            aria-label="Filtrar por coleção"
-            value={filters.collection ?? ""}
-            onChange={(event) =>
-              updateFilters({
-                collection: event.target.value,
-              })
-            }
-            className="rounded-lg border border-white/15 bg-[#241813] px-4 py-3 text-white"
-          >
-            {collections.map((collection) => (
-              <option
-                key={collection.value}
-                value={collection.value}
-              >
-                {collection.label}
-              </option>
-            ))}
-          </select>
-
-          <select
-            aria-label="Ordenar NFTs"
-            value={filters.sort ?? "newest"}
-            onChange={(event) =>
-              updateFilters({
-                sort: event.target.value as NFTSort,
-              })
-            }
-            className="rounded-lg border border-white/15 bg-[#241813] px-4 py-3 text-white"
-          >
-            <option value="newest">Mais recentes</option>
-            <option value="price-asc">Menor preço</option>
-            <option value="price-desc">Maior preço</option>
-            <option value="name-asc">Nome (A–Z)</option>
-          </select>
-
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleClearFilters}
-            className="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
-          >
-            Limpar filtros
-          </Button>
-        </section>
-
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-2xl font-semibold">
-            NFTs disponíveis
-          </h2>
-
-          <div className="flex items-center gap-3 text-sm text-gray-400">
-            <span>
-              {data.total} resultado(s)
-            </span>
-
-            {isFetching && (
-              <span className="text-[#D58B48]">
-                Atualizando...
-              </span>
-            )}
+              {isFetching && (
+                <span
+                  role="status"
+                  className="text-kurio-primary"
+                >
+                  Atualizando...
+                </span>
+              )}
+            </div>
           </div>
+
+          {isPending && (
+            <div
+              role="status"
+              className="rounded-xl border border-kurio-border bg-kurio-surface p-10 text-center"
+            >
+              <p className="text-kurio-text-muted">
+                Carregando NFTs...
+              </p>
+            </div>
+          )}
+
+          {isError && (
+            <div
+              role="alert"
+              className="rounded-xl border border-red-500/30 bg-kurio-surface p-8 text-center"
+            >
+              <h3 className="mb-3 text-xl font-semibold">
+                Erro ao carregar NFTs
+              </h3>
+
+              <p className="mb-5 text-sm text-red-400">
+                {error.message}
+              </p>
+
+              <Button
+                type="button"
+                onClick={() => refetch()}
+                className="bg-kurio-primary text-kurio-background hover:bg-kurio-primary-hover"
+              >
+                Tentar novamente
+              </Button>
+            </div>
+          )}
+
+          {!isPending && !isError && data && (
+            <>
+              {data.data.length === 0 ? (
+                <div className="rounded-xl border border-kurio-border bg-kurio-surface p-10 text-center">
+                  <h3 className="mb-2 text-xl font-semibold">
+                    Nenhum NFT encontrado
+                  </h3>
+
+                  <p className="text-kurio-text-muted">
+                    Tente modificar os filtros da busca.
+                  </p>
+                </div>
+              ) : (
+                <NFTGrid
+                  nfts={data.data}
+                  isFetching={isFetching}
+                  isPlaceholderData={isPlaceholderData}
+                />
+              )}
+
+
+              {totalPages > 1 && (
+                <nav
+                  aria-label="Paginação dos NFTs"
+                  className="mt-20 flex items-center justify-center gap-4"
+                >
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      currentPage <= 1 ||
+                      isPlaceholderData
+                    }
+                    onClick={() =>
+                      updateFilters({
+                        page: currentPage - 1,
+                      })
+                    }
+                  >
+                    Anterior
+                  </Button>
+
+                  <span className="text-center text-xs text-kurio-text-muted sm:text-sm">
+                    Página {currentPage} de {totalPages}
+                  </span>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      currentPage >= totalPages ||
+                      isPlaceholderData
+                    }
+                    onClick={() =>
+                      updateFilters({
+                        page: currentPage + 1,
+                      })
+                    }
+                  >
+                    Próxima
+                  </Button>
+                </nav>
+              )}
+            </>
+          )}
         </div>
-
-        {data.data.length === 0 ? (
-          <div className="rounded-xl border border-white/10 bg-[#241813] p-10 text-center">
-            <h3 className="mb-2 text-xl font-semibold">
-              Nenhum NFT encontrado
-            </h3>
-
-            <p className="text-gray-400">
-              Tente modificar os filtros da busca.
-            </p>
-          </div>
-        ) : (
-          <NFTGrid
-            nfts={data.data}
-            isFetching={isFetching}
-            isPlaceholderData={isPlaceholderData}
-          />
-        )}
-
-        {totalPages > 1 && (
-          <nav
-            aria-label="Paginação dos NFTs"
-            className="mt-20 flex items-center justify-center gap-4"
-          >
-            <Button
-              type="button"
-              variant="outline"
-              disabled={
-                currentPage <= 1 ||
-                isPlaceholderData
-              }
-              onClick={() =>
-                updateFilters({
-                  page: currentPage - 1,
-                })
-              }
-            >
-              Anterior
-            </Button>
-
-            <span className="text-sm text-gray-300">
-              Página {currentPage} de {totalPages}
-            </span>
-
-            <Button
-              type="button"
-              variant="outline"
-              disabled={
-                currentPage >= totalPages ||
-                isPlaceholderData
-              }
-              onClick={() =>
-                updateFilters({
-                  page: currentPage + 1,
-                })
-              }
-            >
-              Próxima
-            </Button>
-          </nav>
-        )}
-      </div>
-    </main>
+      </main>
     </>
   );
 }
-

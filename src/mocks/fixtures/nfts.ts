@@ -13,6 +13,8 @@ export const initialNFTs: NFT[] = [
     network: "Ethereum",
     availableQuantity: 50,
     version: 1,
+    createdAt: "2026-11-12T10:00:00Z",
+    popularityScore: 98,
   },
   {
     id: "nft-002",
@@ -26,6 +28,8 @@ export const initialNFTs: NFT[] = [
     network: "Ethereum",
     availableQuantity: 10,
     version: 1,
+    createdAt: "2026-11-10T14:00:00Z",
+    popularityScore: 87,
   },
   {
     id: "nft-003",
@@ -39,6 +43,8 @@ export const initialNFTs: NFT[] = [
     network: "Ethereum",
     availableQuantity: 25,
     version: 1,
+    createdAt: "2026-11-13T09:00:00Z",
+    popularityScore: 94,
   },
   {
     id: "nft-004",
@@ -52,6 +58,8 @@ export const initialNFTs: NFT[] = [
     network: "Ethereum",
     availableQuantity: 8,
     version: 1,
+    createdAt: "2026-11-08T11:00:00Z",
+    popularityScore: 91,
   },
   {
     id: "nft-005",
@@ -65,6 +73,8 @@ export const initialNFTs: NFT[] = [
     network: "Polygon",
     availableQuantity: 30,
     version: 1,
+    createdAt: "2026-11-05T16:00:00Z",
+    popularityScore: 76,
   },
   {
     id: "nft-006",
@@ -78,6 +88,8 @@ export const initialNFTs: NFT[] = [
     network: "Ethereum",
     availableQuantity: 12,
     version: 1,
+    createdAt: "2026-11-11T13:00:00Z",
+    popularityScore: 96,
   },
   {
     id: "nft-007",
@@ -91,6 +103,8 @@ export const initialNFTs: NFT[] = [
     network: "Ethereum",
     availableQuantity: 40,
     version: 1,
+    createdAt: "2026-10-25T10:00:00Z",
+    popularityScore: 72,
   },
   {
     id: "nft-008",
@@ -104,6 +118,8 @@ export const initialNFTs: NFT[] = [
     network: "Polygon",
     availableQuantity: 18,
     version: 1,
+    createdAt: "2026-11-09T15:00:00Z",
+    popularityScore: 83,
   },
   {
     id: "nft-009",
@@ -117,6 +133,8 @@ export const initialNFTs: NFT[] = [
     network: "Ethereum",
     availableQuantity: 5,
     version: 1,
+    createdAt: "2026-11-07T12:00:00Z",
+    popularityScore: 99,
   },
   {
     id: "nft-010",
@@ -130,6 +148,8 @@ export const initialNFTs: NFT[] = [
     network: "Ethereum",
     availableQuantity: 15,
     version: 1,
+    createdAt: "2026-11-13T18:00:00Z",
+    popularityScore: 89,
   },
   {
     id: "nft-011",
@@ -143,6 +163,8 @@ export const initialNFTs: NFT[] = [
     network: "Polygon",
     availableQuantity: 20,
     version: 1,
+    createdAt: "2026-11-06T10:00:00Z",
+    popularityScore: 81,
   },
   {
     id: "nft-012",
@@ -156,5 +178,7 @@ export const initialNFTs: NFT[] = [
     network: "Ethereum",
     availableQuantity: 60,
     version: 1,
+    createdAt: "2026-11-14T08:00:00Z",
+    popularityScore: 93,
   },
 ];
