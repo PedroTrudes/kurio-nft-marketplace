@@ -17,6 +17,8 @@ import type {
 import Header from "@/components/layout/Header";
 import HeroBanner from "@/components/home/HeroBanner";
 import NFTGrid from "@/components/nft/NFTGrid";
+import MobileSearchBar from "@/components/home/MobileSearchBar";
+import MobileCatalogFilters from "@/components/home/MobileCatalogFilters";
 
 const categories = [
   { label: "Todas as categorias", value: "" },
@@ -41,6 +43,8 @@ export default function HomePage() {
     filters.search ?? "",
   );
 
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+
   const {
     data,
     isPending,
@@ -50,6 +54,12 @@ export default function HomePage() {
     isFetching,
     isPlaceholderData,
   } = useNFTs(filters);
+
+  function submitSearch(){
+    updateFilters({
+      search: searchInput.trim(),
+    })
+  }
 
   function updateFilters(
     updates: Partial<NFTFilters>,
@@ -67,10 +77,7 @@ export default function HomePage() {
     event: React.FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
-
-    updateFilters({
-      search: searchInput.trim(),
-    });
+    submitSearch();
   }
 
   function handleClearFilters() {
@@ -120,7 +127,20 @@ export default function HomePage() {
   return (
 <>
   <Header />
+    <MobileSearchBar 
+      value={searchInput}
+      onChange={setSearchInput}
+      onSearch={submitSearch}
+      onOpenFilters={() => setMobileFiltersOpen(true)}
+    />
 
+    <MobileCatalogFilters 
+      open={mobileFiltersOpen}
+      filters={filters}
+      onClose={() => setMobileFiltersOpen(false)}
+      onUpdateFilters={updateFilters}
+      onClearFilters={handleClearFilters}  
+    />
     <HeroBanner />
 
 <main className="min-h-screen bg-[#140D0A] px-6 py-10 text-white">
@@ -137,7 +157,7 @@ export default function HomePage() {
 
         <form
           onSubmit={handleSearch}
-          className="mb-6 flex flex-col gap-3 sm:flex-row"
+          className="mb-6 hidden flex-col gap-3 lg:flex lg:flex-row"
         >
           <input
             type="search"
@@ -157,7 +177,7 @@ export default function HomePage() {
           </Button>
         </form>
 
-        <section className="mb-8 grid gap-4 md:grid-cols-4">
+        <section className="mb-8 hidden gap-4 lg:grid lg:grid-cols-4">
           <select
             aria-label="Filtrar por categoria"
             value={filters.category ?? ""}
