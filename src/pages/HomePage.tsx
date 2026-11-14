@@ -6,8 +6,6 @@ import {
 } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
-import Header from "@/components/layout/Header";
-import HeroBanner from "@/components/home/HeroBanner";
 
 import { useNFTs } from "@/features/nft/hooks/useNFTs";
 
@@ -15,6 +13,10 @@ import type {
   NFTFilters,
   NFTSort,
 } from "@/features/nft/types/nft.types";
+
+import Header from "@/components/layout/Header";
+import HeroBanner from "@/components/home/HeroBanner";
+import NFTGrid from "@/components/nft/NFTGrid";
 
 const categories = [
   { label: "Todas as categorias", value: "" },
@@ -251,49 +253,17 @@ export default function HomePage() {
             </p>
           </div>
         ) : (
-          <div
-            aria-busy={isFetching}
-            className={`grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 ${
-              isPlaceholderData ? "opacity-50" : ""
-            }`}
-          >
-            {data.data.map((nft) => (
-              <article
-                key={nft.id}
-                className="overflow-hidden rounded-xl border border-white/10 bg-[#241813]"
-              >
-                <img
-                  src={nft.image}
-                  alt={nft.name}
-                  className="aspect-square w-full object-cover"
-                />
-
-                <div className="p-5">
-                  <h3 className="mb-2 text-xl font-semibold">
-                    {nft.name}
-                  </h3>
-
-                  <p className="mb-4 text-sm text-gray-400">
-                    {nft.collection}
-                  </p>
-
-                  <p className="text-lg font-bold text-[#D58B48]">
-                    {nft.price} {nft.currency}
-                  </p>
-
-                  <p className="mt-2 text-sm text-gray-400">
-                    Disponíveis: {nft.availableQuantity}
-                  </p>
-                </div>
-              </article>
-            ))}
-          </div>
+          <NFTGrid
+            nfts={data.data}
+            isFetching={isFetching}
+            isPlaceholderData={isPlaceholderData}
+          />
         )}
 
         {totalPages > 1 && (
           <nav
             aria-label="Paginação dos NFTs"
-            className="mt-10 flex items-center justify-center gap-4"
+            className="mt-20 flex items-center justify-center gap-4"
           >
             <Button
               type="button"
