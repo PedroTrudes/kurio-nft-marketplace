@@ -1,11 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useQuery,
+} from "@tanstack/react-query";
 
 import { getNFTs } from "../api/get-nfts";
 
-export function useNFTs() {
-  return useQuery({
-    queryKey: ["nfts"],
+import type {
+  NFTFilters,
+} from "../types/nft.types";
 
-    queryFn: ({ signal }) => getNFTs(signal),
+export function useNFTs(filters: NFTFilters) {
+  return useQuery({
+    queryKey: ["nfts", filters],
+
+    queryFn: ({ signal }) =>
+      getNFTs(filters, signal),
+
+    placeholderData: keepPreviousData,
   });
 }

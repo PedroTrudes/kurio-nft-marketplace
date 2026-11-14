@@ -12,7 +12,25 @@ export interface NFT {
   version: number;
 }
 
+export type NFTSort =
+  | "newest"
+  | "price-asc"
+  | "price-desc"
+  | "name-asc";
+
+export interface NFTFilters {
+  search?: string;
+  category?: string;
+  collection?: string;
+  sort?: NFTSort;
+  page?: number;
+  limit?: number;
+}
+
 export interface NFTListResponse {
   data: NFT[];
   total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
