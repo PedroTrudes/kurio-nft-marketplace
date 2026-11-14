@@ -6,7 +6,10 @@ import type {
   NFTTab,
 } from "@/features/nft/types/nft.types";
 
-import { initialNFTs } from "../fixtures/nfts";
+import {
+  getAllNFTs,
+  getNFTById,
+} from "../store/nft.store";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 6;
@@ -93,6 +96,7 @@ function isNewRelease(nft: NFT): boolean {
 }
 
 export const nftHandlers = [
+  // LISTAGEM DE NFTs
   http.get("/api/nfts", ({ request }) => {
     const url = new URL(request.url);
 
@@ -139,7 +143,8 @@ export const nftHandlers = [
       MAX_LIMIT,
     );
 
-    let filteredNFTs = [...initialNFTs];
+    // Agora consultamos o estado atual do estoque.
+    let filteredNFTs = getAllNFTs();
 
     if (search) {
       filteredNFTs = filteredNFTs.filter((nft) => {
@@ -225,21 +230,24 @@ export const nftHandlers = [
       totalPages,
     });
   }),
-  http.get("/api/nfts/:id", ({params}) => {
-    const {id} = params;
 
-    const nft = initialNFTs.find((item) => item.id === id);
+  // DETALHES DE UM NFT
+  http.get("/api/nfts/:id", ({ params }) => {
+    const id = String(params.id);
 
-    if(!nft) {
-      return HttpResponse.json({
-        message: "NFT não encontrado."
-      },
-      {
-        status: 404,
-      },
-    );
+    const nft = getNFTById(id);
+
+    if (!nft) {
+      return HttpResponse.json(
+        {
+          message: "NFT não encontrado.",
+        },
+        {
+          status: 404,
+        },
+      );
     }
 
     return HttpResponse.json(nft);
-  })
+  }),
 ];

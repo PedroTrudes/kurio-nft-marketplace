@@ -1,4 +1,4 @@
-import { initialNFTs } from "../fixtures/nfts";
+import { getNFTById } from "./nft.store";
 
 import type {
   Cart,
@@ -74,7 +74,7 @@ function writeStoredItems(items: StoredCartItem[]): void {
 }
 
 function findNFT(nftId: string) {
-  return initialNFTs.find((nft) => nft.id === nftId);
+  return getNFTById(nftId);
 }
 
 function assertValidQuantity(quantity: number): void {
