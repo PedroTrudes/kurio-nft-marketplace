@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 
+import { calculateOrderPricing } from "@/lib/order-pricing";
 import type { Cart } from "@/features/cart/types/cart.types";
 
 interface CartSummaryProps {
@@ -22,7 +23,7 @@ export default function CartSummary({
       "Cupons promocionais ainda não estão disponíveis.",
     );
   }
-
+  const pricing = calculateOrderPricing(cart.totalPrice);
   return (
     <aside className="rounded-t-[36px] bg-kurio-surface px-6 py-8 text-kurio-text md:rounded-none md:bg-transparent md:px-0 md:py-0">
       <h2 className="mb-5 hidden border-b border-kurio-border pb-2 text-sm font-bold md:block">
@@ -74,7 +75,7 @@ export default function CartSummary({
       <dl className="space-y-4 text-sm">
         <div className="flex justify-between gap-4">
           <dt>Subtotal</dt>
-          <dd>{cart.totalPrice} ETH</dd>
+          <dd>{pricing.totalPrice} ETH</dd>
         </div>
 
         <div className="flex justify-between gap-4">
@@ -86,7 +87,7 @@ export default function CartSummary({
           <dt>Taxa de rede</dt>
 
           <dd className="text-right">
-            <span>0.016 ETH</span>
+            <span>{pricing.networkFee} ETH</span>
 
             <span className="mt-1 block text-[10px] text-kurio-primary">
               Taxa estimada
@@ -109,17 +110,12 @@ export default function CartSummary({
       </p>
 
       <div className="mt-8 space-y-4">
-        <button
-          type="button"
-          disabled
-          className="h-12 w-full cursor-not-allowed rounded-full bg-kurio-primary text-sm font-bold text-kurio-background opacity-60 md:rounded-md"
+        <Link
+          to="/checkout"
+          className="flex h-12 w-full items-center justify-center rounded-full bg-kurio-primary text-sm font-bold text-kurio-background transition-colors hover:bg-kurio-primary-hover md:rounded-md"
         >
           Conectar e finalizar
-        </button>
-
-        <p className="text-center text-xs text-kurio-text-muted">
-          Checkout disponível na próxima etapa.
-        </p>
+        </Link>
 
         <Link
           to="/"

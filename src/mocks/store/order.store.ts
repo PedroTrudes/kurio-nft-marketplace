@@ -1,7 +1,10 @@
 import type {
+  CreateOrderItemInput,
   Order,
   OrderItem,
 } from "@/features/orders/types/order.types";
+
+import { calculateOrderPricing } from "@/lib/order-pricing";
 
 import { clearCart, getCart } from "./cart.store";
 
@@ -76,7 +79,6 @@ function readOrderState(): OrderState {
     };
   }
 
-  // Compatibilidade com pedidos criados pela versão anterior.
   if (Array.isArray(stored)) {
     const legacyOrders = stored as Order[];
 
@@ -130,45 +132,91 @@ function persistPendingOrders(
   );
 }
 
-function createFingerprint(
-  items: NFTStockItem[],
-): string {
-  return JSON.stringify(
-    [...items]
-      .sort((a, b) => a.nftId.localeCompare(b.nftId))
-      .map(({ nftId, quantity }) => ({
-        nftId,
-        quantity,
-      })),
-  );
-}
-
-function getCartFingerprint(): string | null {
-  const cart = getCart();
-
-  if (cart.items.length === 0) {
-    return null;
+function normalizeItems(
+  items: CreateOrderItemInput[],
+): NFTStockItem[] {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new OrderStoreError(
+      "O pedido deve conter pelo menos um NFT.",
+      400,
+    );
   }
 
-  return createFingerprint(
-    cart.items.map(({ nftId, quantity }) => ({
+  const quantities = new Map<string, number>();
+
+  for (const item of items) {
+    if (
+      typeof item !== "object" ||
+      item === null ||
+      typeof item.nftId !== "string" ||
+      !item.nftId.trim() ||
+      !Number.isSafeInteger(item.quantity) ||
+      item.quantity < 1
+    ) {
+      throw new OrderStoreError(
+        "Itens inválidos no pedido.",
+        400,
+      );
+    }
+
+    const quantity =
+      (quantities.get(item.nftId) ?? 0) + item.quantity;
+
+    if (!Number.isSafeInteger(quantity)) {
+      throw new OrderStoreError(
+        "Quantidade inválida no pedido.",
+        400,
+      );
+    }
+
+    quantities.set(item.nftId, quantity);
+  }
+
+  return [...quantities.entries()]
+    .map(([nftId, quantity]) => ({
       nftId,
       quantity,
-    })),
-  );
+    }))
+    .sort((a, b) => a.nftId.localeCompare(b.nftId));
 }
 
-function createOrderSnapshot(): {
+function createFingerprint(
+  items: CreateOrderItemInput[],
+): string {
+  return JSON.stringify(normalizeItems(items));
+}
+
+function createOrderSnapshot(
+  requestedItems: NFTStockItem[],
+): {
   order: Order;
   stockItems: NFTStockItem[];
   fingerprint: string;
 } {
   const cart = getCart();
+  const pricing = calculateOrderPricing(cart.totalPrice);
 
   if (cart.items.length === 0) {
     throw new OrderStoreError(
       "Seu carrinho está vazio.",
       400,
+    );
+  }
+
+  const cartFingerprint = createFingerprint(
+    cart.items.map(({ nftId, quantity }) => ({
+      nftId,
+      quantity,
+    })),
+  );
+
+  const requestFingerprint =
+    createFingerprint(requestedItems);
+
+  if (cartFingerprint !== requestFingerprint) {
+    throw new OrderStoreError(
+      "Os itens enviados não correspondem ao carrinho.",
+      409,
     );
   }
 
@@ -202,31 +250,35 @@ function createOrderSnapshot(): {
     },
   );
 
-  const stockItems = items.map(
-    ({ nftId, quantity }) => ({
-      nftId,
-      quantity,
-    }),
-  );
-
   const order: Order = {
     id: crypto.randomUUID(),
     status: "confirmed",
     items,
     totalItems: cart.totalItems,
-    subtotal: cart.totalPrice,
-    discount: "0.00000000",
-    networkFee: "0.00000000",
-    totalPrice: cart.totalPrice,
+    
+    subtotal: pricing.subtotal,
+    discount: pricing.discount,
+    networkFee: pricing.networkFee,
+    totalPrice: pricing.totalPrice,
     currency: "ETH",
     createdAt: new Date().toISOString(),
   };
 
   return {
     order,
-    stockItems,
-    fingerprint: createFingerprint(stockItems),
+    stockItems: requestedItems,
+    fingerprint: requestFingerprint,
   };
+}
+
+function removePendingOrder(
+  idempotencyKey: string,
+): void {
+  const remaining = readPendingOrders().filter(
+    (item) => item.idempotencyKey !== idempotencyKey,
+  );
+
+  persistPendingOrders(remaining);
 }
 
 function finalizePendingOrder(
@@ -244,7 +296,6 @@ function finalizePendingOrder(
   }
 
   try {
-    // Se a operação já foi aplicada, não desconta novamente.
     if (!hasAppliedStockTransaction(pending.order.id)) {
       applyStockTransaction(
         pending.order.id,
@@ -252,7 +303,7 @@ function finalizePendingOrder(
       );
     }
 
-    const updatedState: OrderState = {
+    persistOrderState({
       records: [
         ...state.records,
         {
@@ -261,29 +312,43 @@ function finalizePendingOrder(
           order: pending.order,
         },
       ],
-    };
+    });
 
-    persistOrderState(updatedState);
+    const cart = getCart();
 
-    // A limpeza do carrinho acontece somente após confirmar o pedido.
-    if (getCartFingerprint() === pending.fingerprint) {
+    const currentFingerprint =
+      cart.items.length > 0
+        ? createFingerprint(
+            cart.items.map(({ nftId, quantity }) => ({
+              nftId,
+              quantity,
+            })),
+          )
+        : null;
+
+    if (currentFingerprint === pending.fingerprint) {
       clearCart();
     }
 
-    const remainingPending = readPendingOrders().filter(
-      (item) =>
-        item.idempotencyKey !== pending.idempotencyKey,
-    );
-
-    persistPendingOrders(remainingPending);
+    removePendingOrder(pending.idempotencyKey);
 
     return pending.order;
   } catch (error) {
     if (
       error instanceof Error &&
-      error.message.includes("Estoque insuficiente")
+      (
+        error.message.includes("Estoque insuficiente") ||
+        error.message.includes("NFT não encontrado")
+      )
     ) {
-      throw new OrderStoreError(error.message, 409);
+      removePendingOrder(pending.idempotencyKey);
+
+      throw new OrderStoreError(
+        error.message,
+        error.message.includes("Estoque insuficiente")
+          ? 409
+          : 404,
+      );
     }
 
     throw error;
@@ -306,6 +371,7 @@ export function getAllOrders(): Order[] {
 
 export function createOrder(
   idempotencyKey: string,
+  items: CreateOrderItemInput[],
 ): Order {
   if (
     typeof idempotencyKey !== "string" ||
@@ -317,6 +383,9 @@ export function createOrder(
     );
   }
 
+  const requestedItems = normalizeItems(items);
+  const fingerprint = createFingerprint(requestedItems);
+
   const state = readOrderState();
   const pendingOrders = readPendingOrders();
 
@@ -325,18 +394,8 @@ export function createOrder(
       record.idempotencyKey === idempotencyKey,
   );
 
-  const pendingOrder = pendingOrders.find(
-    (item) => item.idempotencyKey === idempotencyKey,
-  );
-
-  const currentFingerprint = getCartFingerprint();
-
-  // Uma chave já utilizada não pode representar outro carrinho.
   if (existingRecord) {
-    if (
-      currentFingerprint !== null &&
-      existingRecord.fingerprint !== currentFingerprint
-    ) {
+    if (existingRecord.fingerprint !== fingerprint) {
       throw new OrderStoreError(
         "Chave de idempotência já utilizada para outra compra.",
         409,
@@ -346,12 +405,12 @@ export function createOrder(
     return existingRecord.order;
   }
 
-  // Recuperar uma operação interrompida.
+  const pendingOrder = pendingOrders.find(
+    (item) => item.idempotencyKey === idempotencyKey,
+  );
+
   if (pendingOrder) {
-    if (
-      currentFingerprint !== null &&
-      pendingOrder.fingerprint !== currentFingerprint
-    ) {
+    if (pendingOrder.fingerprint !== fingerprint) {
       throw new OrderStoreError(
         "Chave de idempotência já utilizada para outra compra.",
         409,
@@ -361,7 +420,7 @@ export function createOrder(
     return finalizePendingOrder(pendingOrder);
   }
 
-  const snapshot = createOrderSnapshot();
+  const snapshot = createOrderSnapshot(requestedItems);
 
   const pending: PendingOrder = {
     idempotencyKey,
@@ -370,7 +429,6 @@ export function createOrder(
     stockItems: snapshot.stockItems,
   };
 
-  // Registrar a intenção antes de modificar o estoque.
   persistPendingOrders([
     ...pendingOrders,
     pending,

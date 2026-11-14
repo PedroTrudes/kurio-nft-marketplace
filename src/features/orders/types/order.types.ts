@@ -23,8 +23,14 @@ export interface Order {
   createdAt: string;
 }
 
+export interface CreateOrderItemInput {
+  nftId: string;
+  quantity: number;
+}
+
 export interface CreateOrderInput {
   idempotencyKey: string;
+  items: CreateOrderItemInput[];
 }
 
 export interface OrderError {
