@@ -7,6 +7,7 @@ import {
 
 import HomePage from "@/pages/HomePage";
 import NFTDetailsPage from "@/pages/NFTDetailsPage";
+import CartPage from "@/pages/CartPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 import type {
@@ -109,9 +110,16 @@ export const nftDetailsRoute = createRoute({
   component: NFTDetailsPage,
 });
 
+export const cartRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/cart",
+  component: CartPage,
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   nftDetailsRoute,
+  cartRoute,
 ]);
 
 export const router = createRouter({
