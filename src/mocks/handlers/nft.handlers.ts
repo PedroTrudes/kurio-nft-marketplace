@@ -225,4 +225,21 @@ export const nftHandlers = [
       totalPages,
     });
   }),
+  http.get("/api/nfts/:id", ({params}) => {
+    const {id} = params;
+
+    const nft = initialNFTs.find((item) => item.id === id);
+
+    if(!nft) {
+      return HttpResponse.json({
+        message: "NFT não encontrado."
+      },
+      {
+        status: 404,
+      },
+    );
+    }
+
+    return HttpResponse.json(nft);
+  })
 ];

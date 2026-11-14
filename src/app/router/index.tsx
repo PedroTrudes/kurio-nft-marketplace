@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-router";
 
 import HomePage from "@/pages/HomePage";
+import NFTDetailsPage from "@/pages/NFTDetailsPage";
 import NotFoundPage from "@/pages/NotFoundPage";
 
 import type {
@@ -82,7 +83,6 @@ function validateNFTSearch(
         : "",
 
     sort,
-
     tab,
 
     page: parsePositiveInteger(search.page, 1),
@@ -103,8 +103,15 @@ export const homeRoute = createRoute({
   validateSearch: validateNFTSearch,
 });
 
+export const nftDetailsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/nft/$nftId",
+  component: NFTDetailsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
+  nftDetailsRoute,
 ]);
 
 export const router = createRouter({
