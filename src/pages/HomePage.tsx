@@ -6,6 +6,8 @@ import {
 } from "@tanstack/react-router";
 
 import { Button } from "@/components/ui/button";
+import Header from "@/components/layout/Header";
+import HeroBanner from "@/components/home/HeroBanner";
 
 import { useNFTs } from "@/features/nft/hooks/useNFTs";
 
@@ -114,7 +116,12 @@ export default function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#140D0A] px-6 py-10 text-white">
+<>
+  <Header />
+
+    <HeroBanner />
+
+<main className="min-h-screen bg-[#140D0A] px-6 py-10 text-white">
       <div className="mx-auto max-w-7xl">
         <header className="mb-10">
           <h1 className="mb-3 text-4xl font-bold text-[#D58B48]">
@@ -327,5 +334,7 @@ export default function HomePage() {
         )}
       </div>
     </main>
+    </>
   );
 }
+
