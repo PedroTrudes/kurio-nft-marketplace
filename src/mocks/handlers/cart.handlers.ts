@@ -36,12 +36,11 @@ function handleCartError(error: unknown) {
 }
 
 export const cartHandlers = [
-  // CONSULTAR CARRINHO
   http.get("/api/cart", () => {
     return HttpResponse.json(getCart());
   }),
 
-  // ADICIONAR ITEM
+
   http.post("/api/cart/items", async ({ request }) => {
     try {
       const body =
@@ -60,7 +59,6 @@ export const cartHandlers = [
     }
   }),
 
-  // ALTERAR QUANTIDADE
   http.patch(
     "/api/cart/items/:nftId",
     async ({ params, request }) => {
@@ -82,7 +80,6 @@ export const cartHandlers = [
     },
   ),
 
-  // REMOVER ITEM
   http.delete(
     "/api/cart/items/:nftId",
     ({ params }) => {

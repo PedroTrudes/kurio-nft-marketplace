@@ -3,6 +3,26 @@ import type { NFT } from "@/features/nft/types/nft.types";
 import { initialNFTs } from "../fixtures/nfts";
 
 const NFT_STORAGE_KEY = "kurio-nfts";
+const APPLIED_TRANSACTIONS_KEY = "kurio-stock-transactions";
+
+export interface NFTStockItem {
+  nftId: string;
+  quantity: number;
+}
+
+interface StockTransactionRecord {
+  transactionId: string;
+  items: NFTStockItem[];
+}
+
+interface StockState {
+  nfts: NFT[];
+  transactions: StockTransactionRecord[];
+}
+
+function getInitialNFTs(): NFT[] {
+  return initialNFTs.map((nft) => ({ ...nft }));
+}
 
 function isValidStoredNFT(value: unknown): value is NFT {
   if (typeof value !== "object" || value === null) {
@@ -23,47 +43,115 @@ function isValidStoredNFT(value: unknown): value is NFT {
   );
 }
 
-function readStoredNFTs(): NFT[] {
+function isValidTransaction(
+  value: unknown,
+): value is StockTransactionRecord {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  return (
+    typeof record.transactionId === "string" &&
+    Array.isArray(record.items)
+  );
+}
+
+function readLegacyNFTs(): NFT[] {
   try {
     const raw = localStorage.getItem(NFT_STORAGE_KEY);
 
     if (!raw) {
-      return initialNFTs.map((nft) => ({ ...nft }));
+      return getInitialNFTs();
     }
 
     const parsed: unknown = JSON.parse(raw);
 
     if (!Array.isArray(parsed)) {
-      return initialNFTs.map((nft) => ({ ...nft }));
+      return getInitialNFTs();
     }
 
     const storedNFTs = parsed.filter(isValidStoredNFT);
 
-    if (storedNFTs.length !== initialNFTs.length) {
-      return initialNFTs.map((nft) => ({ ...nft }));
+    const initialIds = new Set(initialNFTs.map((nft) => nft.id));
+    const storedIds = new Set(storedNFTs.map((nft) => nft.id));
+
+    if (
+      storedNFTs.length !== initialNFTs.length ||
+      storedIds.size !== initialIds.size ||
+      [...storedIds].some((id) => !initialIds.has(id))
+    ) {
+      return getInitialNFTs();
     }
 
-    return storedNFTs;
+    return storedNFTs.map((nft) => ({ ...nft }));
   } catch {
-    return initialNFTs.map((nft) => ({ ...nft }));
+    return getInitialNFTs();
   }
 }
 
-let nftStore = readStoredNFTs();
+function readStockState(): StockState {
+  try {
+    const raw = localStorage.getItem(APPLIED_TRANSACTIONS_KEY);
 
-function persistNFTs(): void {
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "nfts" in parsed &&
+        "transactions" in parsed &&
+        Array.isArray(parsed.nfts) &&
+        Array.isArray(parsed.transactions)
+      ) {
+        const nfts = parsed.nfts.filter(isValidStoredNFT);
+        const transactions = parsed.transactions.filter(
+          isValidTransaction,
+        );
+
+        const initialIds = new Set(
+          initialNFTs.map((nft) => nft.id),
+        );
+
+        if (
+          nfts.length === initialNFTs.length &&
+          new Set(nfts.map((nft) => nft.id)).size === initialIds.size &&
+          nfts.every((nft) => initialIds.has(nft.id))
+        ) {
+          return {
+            nfts: nfts.map((nft) => ({ ...nft })),
+            transactions,
+          };
+        }
+      }
+    }
+  } catch {
+    // Recupera o estado anterior quando possível.
+  }
+
+  return {
+    nfts: readLegacyNFTs(),
+    transactions: [],
+  };
+}
+
+const stockState = readStockState();
+
+function persistStockState(state: StockState): void {
   localStorage.setItem(
-    NFT_STORAGE_KEY,
-    JSON.stringify(nftStore),
+    APPLIED_TRANSACTIONS_KEY,
+    JSON.stringify(state),
   );
 }
 
 export function getAllNFTs(): NFT[] {
-  return nftStore.map((nft) => ({ ...nft }));
+  return stockState.nfts.map((nft) => ({ ...nft }));
 }
 
 export function getNFTById(id: string): NFT | undefined {
-  const nft = nftStore.find((item) => item.id === id);
+  const nft = stockState.nfts.find((item) => item.id === id);
 
   return nft ? { ...nft } : undefined;
 }
@@ -82,30 +170,160 @@ export function hasAvailableStock(
   );
 }
 
+export function hasAppliedStockTransaction(
+  transactionId: string,
+): boolean {
+  return stockState.transactions.some(
+    (record) => record.transactionId === transactionId,
+  );
+}
+
+function normalizeStockItems(
+  items: NFTStockItem[],
+): NFTStockItem[] {
+  if (items.length === 0) {
+    throw new Error("O pedido não possui NFTs.");
+  }
+
+  const quantities = new Map<string, number>();
+
+  for (const item of items) {
+    if (
+      typeof item.nftId !== "string" ||
+      !item.nftId.trim() ||
+      !Number.isSafeInteger(item.quantity) ||
+      item.quantity < 1
+    ) {
+      throw new Error("Quantidade inválida no pedido.");
+    }
+
+    const total =
+      (quantities.get(item.nftId) ?? 0) + item.quantity;
+
+    if (!Number.isSafeInteger(total)) {
+      throw new Error("Quantidade inválida no pedido.");
+    }
+
+    quantities.set(item.nftId, total);
+  }
+
+  return [...quantities.entries()]
+    .map(([nftId, quantity]) => ({ nftId, quantity }))
+    .sort((a, b) => a.nftId.localeCompare(b.nftId));
+}
+
+function getStockFingerprint(items: NFTStockItem[]): string {
+  return JSON.stringify(normalizeStockItems(items));
+}
+
+export function applyStockTransaction(
+  transactionId: string,
+  items: NFTStockItem[],
+): NFT[] {
+  if (!transactionId.trim()) {
+    throw new Error("Identificador da transação inválido.");
+  }
+
+  const normalizedItems = normalizeStockItems(items);
+
+  const existingTransaction = stockState.transactions.find(
+    (record) => record.transactionId === transactionId,
+  );
+
+  if (existingTransaction) {
+    if (
+      getStockFingerprint(existingTransaction.items) !==
+      getStockFingerprint(normalizedItems)
+    ) {
+      throw new Error(
+        "Transação já utilizada com itens diferentes.",
+      );
+    }
+
+    return normalizedItems
+      .map((item) => getNFTById(item.nftId))
+      .filter((nft): nft is NFT => nft !== undefined);
+  }
+
+  const quantities = new Map(
+    normalizedItems.map((item) => [
+      item.nftId,
+      item.quantity,
+    ]),
+  );
+
+  // Valida todos os NFTs antes de modificar qualquer estoque.
+  for (const { nftId, quantity } of normalizedItems) {
+    const nft = stockState.nfts.find(
+      (item) => item.id === nftId,
+    );
+
+    if (!nft) {
+      throw new Error(`NFT não encontrado: ${nftId}`);
+    }
+
+    if (nft.availableQuantity < quantity) {
+      throw new Error(
+        `Estoque insuficiente para ${nft.name}.`,
+      );
+    }
+  }
+
+  const updatedNFTs = stockState.nfts.map((nft) => {
+    const quantity = quantities.get(nft.id);
+
+    if (quantity === undefined) {
+      return { ...nft };
+    }
+
+    return {
+      ...nft,
+      availableQuantity: nft.availableQuantity - quantity,
+      version: nft.version + 1,
+    };
+  });
+
+  const updatedTransactions = [
+    ...stockState.transactions,
+    {
+      transactionId,
+      items: normalizedItems,
+    },
+  ];
+
+  // Estoque e identificador da transação são persistidos juntos.
+  persistStockState({
+    nfts: updatedNFTs,
+    transactions: updatedTransactions,
+  });
+
+  stockState.nfts = updatedNFTs;
+  stockState.transactions = updatedTransactions;
+
+  return updatedNFTs
+    .filter((nft) => quantities.has(nft.id))
+    .map((nft) => ({ ...nft }));
+}
+
+export function decreaseNFTStockBatch(
+  items: NFTStockItem[],
+): NFT[] {
+  return applyStockTransaction(
+    crypto.randomUUID(),
+    items,
+  );
+}
+
 export function decreaseNFTStock(
   id: string,
   quantity: number,
 ): NFT {
-  if (!Number.isSafeInteger(quantity) || quantity < 1) {
-    throw new Error("Quantidade inválida.");
-  }
+  const updatedNFTs = decreaseNFTStockBatch([
+    {
+      nftId: id,
+      quantity,
+    },
+  ]);
 
-  const nft = nftStore.find((item) => item.id === id);
-
-  if (!nft) {
-    throw new Error("NFT não encontrado.");
-  }
-
-  if (nft.availableQuantity < quantity) {
-    throw new Error(
-      "Estoque insuficiente para concluir a compra.",
-    );
-  }
-
-  nft.availableQuantity -= quantity;
-  nft.version += 1;
-
-  persistNFTs();
-
-  return { ...nft };
+  return updatedNFTs[0];
 }
