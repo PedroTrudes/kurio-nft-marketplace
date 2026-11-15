@@ -50,8 +50,6 @@ export default function HomePage() {
     isPlaceholderData,
   } = useNFTs(filters);
 
-  // Atualiza os filtros na URL.
-  // Ao modificar um filtro, volta para a primeira página.
   function updateFilters(updates: Partial<NFTFilters>) {
     navigate({
       search: (previous) => ({
@@ -62,14 +60,12 @@ export default function HomePage() {
     });
   }
 
-  // Recebe a busca do CatalogSearch.
   function handleCatalogSearch(value: string) {
     updateFilters({
       search: value,
     });
   }
 
-  // Altera a aba selecionada.
   function handleTabChange(tab: NFTTab) {
     updateFilters({
       tab,
@@ -77,7 +73,6 @@ export default function HomePage() {
     });
   }
 
-  // Limpa os filtros e restaura o catálogo.
   function handleClearFilters() {
     navigate({
       search: {

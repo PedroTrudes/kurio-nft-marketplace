@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import {
   Link,
   useNavigate,
@@ -38,14 +39,24 @@ export default function Header() {
   const isHome = pathname === "/";
   const isCart = pathname === "/cart";
 
+  function handleSearchClick() {
+    if (!isHome) {
+      navigate({ to: "/" }).then(() => {
+        window.dispatchEvent(new Event("kurio:toggle-search"));
+      });
+
+      return;
+    }
+
+    window.dispatchEvent(new Event("kurio:toggle-search"));
+  }
+
   async function handleLogout() {
     setLogoutError(null);
 
     try {
-      // 1. Encerra a sessão e limpa os caches no useLogout.
       await logout.mutateAsync();
 
-      // 2. Redireciona para a Home.
       await navigate({
         to: "/",
         replace: true,
@@ -59,7 +70,18 @@ export default function Header() {
 
   return (
     <>
-      <header className="hidden border-b border-kurio-border/40 bg-kurio-background md:block">
+      <header className="
+    sticky
+    top-0
+    z-50
+    hidden
+    w-full
+    border-b
+    border-kurio-border/60
+    bg-kurio-background/95
+    backdrop-blur-md
+    md:block
+  ">
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
           <Link
             to="/"
@@ -100,13 +122,15 @@ export default function Header() {
           </nav>
 
           <div className="flex items-center gap-5">
-            <Link
-              to="/"
-              aria-label="Buscar NFTs"
+            <button
+              type="button"
+              onClick={handleSearchClick}
+              aria-label="Abrir busca de NFTs"
+              title="Buscar NFTs"
               className="text-kurio-text transition-colors hover:text-kurio-primary"
             >
               <Search size={20} />
-            </Link>
+            </button>
 
             <Link
               to="/cart"
