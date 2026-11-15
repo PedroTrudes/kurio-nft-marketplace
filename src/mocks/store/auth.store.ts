@@ -8,7 +8,16 @@ import type {
 const USERS_STORAGE_KEY = "kurio-users";
 const SESSION_STORAGE_KEY = "kurio-auth-session";
 
+const PASSWORD_ITERATIONS = 120_000;
+const PASSWORD_HASH = "SHA-256";
+const PASSWORD_KEY_LENGTH = 256;
+
 interface StoredUser extends User {
+  passwordHash: string;
+  passwordSalt: string;
+}
+
+interface LegacyStoredUser extends User {
   password: string;
 }
 
@@ -23,24 +32,96 @@ export class AuthStoreError extends Error {
   }
 }
 
-function readUsers(): StoredUser[] {
-  try {
-    const stored = localStorage.getItem(USERS_STORAGE_KEY);
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
 
-    if (!stored) {
-      return [];
-    }
-
-    const parsed: unknown = JSON.parse(stored);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed as StoredUser[];
-  } catch {
-    return [];
+function hexToBytes(hex: string): Uint8Array<ArrayBuffer> {
+  if (!/^(?:[0-9a-f]{2})+$/i.test(hex)) {
+    throw new Error("Salt inválido.");
   }
+
+  const bytes = new Uint8Array(hex.length / 2);
+
+  for (let index = 0; index < bytes.length; index++) {
+    bytes[index] = Number.parseInt(
+      hex.slice(index * 2, index * 2 + 2),
+      16,
+    );
+  }
+
+  return bytes;
+}
+
+function createSalt(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+
+  return bytesToHex(bytes);
+}
+
+async function hashPassword(
+  password: string,
+  salt: string,
+): Promise<string> {
+  const encoder = new TextEncoder();
+
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+
+  const derivedBits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      salt: hexToBytes(salt),
+      iterations: PASSWORD_ITERATIONS,
+      hash: PASSWORD_HASH,
+    },
+    keyMaterial,
+    PASSWORD_KEY_LENGTH,
+  );
+
+  return bytesToHex(new Uint8Array(derivedBits));
+}
+
+function isStoredUser(value: unknown): value is StoredUser {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const user = value as Record<string, unknown>;
+
+  return (
+    typeof user.id === "string" &&
+    typeof user.username === "string" &&
+    typeof user.email === "string" &&
+    typeof user.createdAt === "string" &&
+    typeof user.passwordHash === "string" &&
+    typeof user.passwordSalt === "string"
+  );
+}
+
+function isLegacyStoredUser(
+  value: unknown,
+): value is LegacyStoredUser {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const user = value as Record<string, unknown>;
+
+  return (
+    typeof user.id === "string" &&
+    typeof user.username === "string" &&
+    typeof user.email === "string" &&
+    typeof user.createdAt === "string" &&
+    typeof user.password === "string"
+  );
 }
 
 function saveUsers(users: StoredUser[]): void {
@@ -50,9 +131,70 @@ function saveUsers(users: StoredUser[]): void {
   );
 }
 
+async function readUsers(): Promise<StoredUser[]> {
+  const stored = localStorage.getItem(USERS_STORAGE_KEY);
+
+  if (!stored) {
+    return [];
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(stored);
+  } catch {
+    return [];
+  }
+
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+
+  const users: StoredUser[] = [];
+  let needsMigration = false;
+
+  for (const item of parsed) {
+    if (isStoredUser(item)) {
+      users.push({
+        id: item.id,
+        username: item.username,
+        email: item.email,
+        createdAt: item.createdAt,
+        passwordHash: item.passwordHash,
+        passwordSalt: item.passwordSalt,
+      });
+
+      continue;
+    }
+
+    if (isLegacyStoredUser(item)) {
+      needsMigration = true;
+
+      const salt = createSalt();
+
+      users.push({
+        id: item.id,
+        username: item.username,
+        email: item.email,
+        createdAt: item.createdAt,
+        passwordHash: await hashPassword(item.password, salt),
+        passwordSalt: salt,
+      });
+    }
+  }
+
+  if (needsMigration) {
+    saveUsers(users);
+  }
+
+  return users;
+}
+
 function readSession(): AuthSession | null {
   try {
-    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+    const stored = localStorage.getItem(
+      SESSION_STORAGE_KEY,
+    );
 
     if (!stored) {
       return null;
@@ -89,9 +231,9 @@ function createSession(user: StoredUser): AuthSession {
   return session;
 }
 
-export function registerUser(
+export async function registerUser(
   input: RegisterInput,
-): AuthSession {
+): Promise<AuthSession> {
   const username = input.username?.trim();
   const email = input.email?.trim().toLowerCase();
   const password = input.password;
@@ -104,14 +246,20 @@ export function registerUser(
     );
   }
 
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  if (
+    !email ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
     throw new AuthStoreError(
       "Informe um e-mail válido.",
       400,
     );
   }
 
-  if (typeof password !== "string" || password.length < 8) {
+  if (
+    typeof password !== "string" ||
+    password.length < 8
+  ) {
     throw new AuthStoreError(
       "A senha deve ter pelo menos 8 caracteres.",
       400,
@@ -125,7 +273,7 @@ export function registerUser(
     );
   }
 
-  const users = readUsers();
+  const users = await readUsers();
 
   const emailExists = users.some(
     (user) => user.email === email,
@@ -140,7 +288,8 @@ export function registerUser(
 
   const usernameExists = users.some(
     (user) =>
-      user.username.toLowerCase() === username.toLowerCase(),
+      user.username.toLowerCase() ===
+      username.toLowerCase(),
   );
 
   if (usernameExists) {
@@ -150,11 +299,15 @@ export function registerUser(
     );
   }
 
+  const salt = createSalt();
+  const passwordHash = await hashPassword(password, salt);
+
   const newUser: StoredUser = {
     id: crypto.randomUUID(),
     username,
     email,
-    password,
+    passwordHash,
+    passwordSalt: salt,
     createdAt: new Date().toISOString(),
   };
 
@@ -163,25 +316,27 @@ export function registerUser(
   return createSession(newUser);
 }
 
-export function loginUser(
+export async function loginUser(
   input: LoginInput,
-): AuthSession {
+): Promise<AuthSession> {
   const email = input.email?.trim().toLowerCase();
   const password = input.password;
 
-  if (!email || !password) {
+  if (
+    !email ||
+    typeof password !== "string" ||
+    !password
+  ) {
     throw new AuthStoreError(
       "Informe seu e-mail e senha.",
       400,
     );
   }
 
-  const users = readUsers();
+  const users = await readUsers();
 
   const user = users.find(
-    (storedUser) =>
-      storedUser.email === email &&
-      storedUser.password === password,
+    (storedUser) => storedUser.email === email,
   );
 
   if (!user) {
@@ -191,12 +346,24 @@ export function loginUser(
     );
   }
 
+  const passwordHash = await hashPassword(
+    password,
+    user.passwordSalt,
+  );
+
+  if (passwordHash !== user.passwordHash) {
+    throw new AuthStoreError(
+      "E-mail ou senha incorretos.",
+      401,
+    );
+  }
+
   return createSession(user);
 }
 
-export function getCurrentUser(
+export async function getCurrentUser(
   token: string | null,
-): User {
+): Promise<User> {
   if (!token) {
     throw new AuthStoreError(
       "Usuário não autenticado.",
@@ -213,7 +380,7 @@ export function getCurrentUser(
     );
   }
 
-  const users = readUsers();
+  const users = await readUsers();
 
   const user = users.find(
     (storedUser) => storedUser.id === session.user.id,

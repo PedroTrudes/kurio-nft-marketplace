@@ -93,7 +93,8 @@ function handleOrderError(error: unknown) {
 export const orderHandlers = [
   http.post("/api/orders", async ({ request }) => {
     try {
-      const user = requireAuth(request);
+      // Aguarda a validação da sessão antes de criar o pedido.
+      const user = await requireAuth(request);
 
       const idempotencyKey =
         request.headers.get("Idempotency-Key");
@@ -129,7 +130,6 @@ export const orderHandlers = [
         );
       }
 
-      // Evita colisões de chaves de idempotência entre contas.
       const scopedIdempotencyKey =
         `${user.id}:${idempotencyKey}`;
 
@@ -157,9 +157,10 @@ export const orderHandlers = [
     }
   }),
 
-  http.get("/api/orders/:id", ({ params, request }) => {
+  http.get("/api/orders/:id", async ({ params, request }) => {
     try {
-      const user = requireAuth(request);
+      // Também aguarda a autenticação na consulta do pedido.
+      const user = await requireAuth(request);
 
       const orderId = String(params.id);
 

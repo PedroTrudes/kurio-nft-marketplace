@@ -22,19 +22,27 @@ function handleAuthError(error: unknown): Response {
   }
 
   return HttpResponse.json(
-    { message: "Ocorreu um erro interno na autenticação." },
+    {
+      message: "Ocorreu um erro interno na autenticação.",
+    },
     { status: 500 },
   );
 }
 
-function getBearerToken(request: Request): string | null {
-  const authorization = request.headers.get("Authorization");
+function getBearerToken(
+  request: Request,
+): string | null {
+  const authorization = request.headers.get(
+    "Authorization",
+  );
 
   if (!authorization?.startsWith("Bearer ")) {
     return null;
   }
 
-  const token = authorization.slice("Bearer ".length).trim();
+  const token = authorization
+    .slice("Bearer ".length)
+    .trim();
 
   return token || null;
 }
@@ -53,7 +61,7 @@ export const authHandlers = [
         );
       }
 
-      const session = registerUser(body);
+      const session = await registerUser(body);
 
       return HttpResponse.json(session, {
         status: 201,
@@ -76,7 +84,7 @@ export const authHandlers = [
         );
       }
 
-      const session = loginUser(body);
+      const session = await loginUser(body);
 
       return HttpResponse.json(session, {
         status: 200,
@@ -86,11 +94,11 @@ export const authHandlers = [
     }
   }),
 
-  http.get("/api/auth/me", ({ request }) => {
+  http.get("/api/auth/me", async ({ request }) => {
     try {
       const token = getBearerToken(request);
 
-      const user = getCurrentUser(token);
+      const user = await getCurrentUser(token);
 
       return HttpResponse.json(user, {
         status: 200,
@@ -100,11 +108,11 @@ export const authHandlers = [
     }
   }),
 
-  http.post("/api/auth/logout", ({ request }) => {
+  http.post("/api/auth/logout", async ({ request }) => {
     try {
       const token = getBearerToken(request);
 
-      getCurrentUser(token);
+      await getCurrentUser(token);
 
       logoutUser();
 
