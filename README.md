@@ -27,7 +27,7 @@ React 19, TypeScript 6, Vite 8, TanStack Router, TanStack Query, Axios, Tailwind
 **Pré-requisitos:** Node.js compatível com Vite 8 (20.19+ ou 22.12+) e npm.
 
 ```bash
-git clone <URL_DO_REPOSITORIO>
+git clone https://github.com/PedroTrudes/kurio-nft-marketplace.git
 cd kurio-nft-marketplace
 npm ci
 ```
