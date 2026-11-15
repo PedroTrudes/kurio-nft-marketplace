@@ -6,7 +6,9 @@ test.describe("Catálogo de NFTs", () => {
   });
 
   test("deve carregar a aplicação corretamente", async ({ page }) => {
-    await expect(page).toHaveURL("/");
+    await expect
+    .poll(() => new URL(page.url()).pathname)
+    .toBe("/");
 
     await expect(page.locator("#root")).toBeVisible();
   });
