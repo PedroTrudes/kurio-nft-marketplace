@@ -11,23 +11,19 @@ import {
 
 import { authQueryKey } from "./useAuth";
 
+import { mergeGuestCart } from "@/mocks/store/cart.store";
+
 import type {
   AuthSession,
-  User,
 } from "../types/auth.types";
 
 const SESSION_STORAGE_KEY = "kurio-auth-session";
 
-function updateAuthCache(
-  session: AuthSession,
-  setQueryData: (user: User) => void,
-) {
+function saveSession(session: AuthSession): void {
   localStorage.setItem(
     SESSION_STORAGE_KEY,
     JSON.stringify(session),
   );
-
-  setQueryData(session.user);
 }
 
 export function useLogin() {
@@ -36,10 +32,39 @@ export function useLogin() {
   return useMutation({
     mutationFn: loginRequest,
 
-    onSuccess: (session) => {
-      updateAuthCache(session, (user) => {
-        queryClient.setQueryData(authQueryKey, user);
+    onSuccess: async (session) => {
+      saveSession(session);
+
+      queryClient.removeQueries({
+        queryKey: ["cart"],
       });
+
+      queryClient.removeQueries({
+        queryKey: ["orders"],
+      });
+
+      queryClient.setQueryData(
+        authQueryKey,
+        session.user,
+      );
+
+      try {
+        const mergedCart = mergeGuestCart(session.user.id);
+
+        queryClient.setQueryData(
+          ["cart"],
+          mergedCart,
+        );
+      } catch (error) {
+        console.warn(
+          "[Cart] Não foi possível transferir o carrinho visitante:",
+          error,
+        );
+
+        await queryClient.invalidateQueries({
+          queryKey: ["cart"],
+        });
+      }
     },
   });
 }
@@ -50,10 +75,39 @@ export function useRegister() {
   return useMutation({
     mutationFn: registerRequest,
 
-    onSuccess: (session) => {
-      updateAuthCache(session, (user) => {
-        queryClient.setQueryData(authQueryKey, user);
+    onSuccess: async (session) => {
+      saveSession(session);
+
+      queryClient.removeQueries({
+        queryKey: ["cart"],
       });
+
+      queryClient.removeQueries({
+        queryKey: ["orders"],
+      });
+
+      queryClient.setQueryData(
+        authQueryKey,
+        session.user,
+      );
+
+      try {
+        const mergedCart = mergeGuestCart(session.user.id);
+
+        queryClient.setQueryData(
+          ["cart"],
+          mergedCart,
+        );
+      } catch (error) {
+        console.warn(
+          "[Cart] Não foi possível transferir o carrinho visitante:",
+          error,
+        );
+
+        await queryClient.invalidateQueries({
+          queryKey: ["cart"],
+        });
+      }
     },
   });
 }
@@ -68,6 +122,14 @@ export function useLogout() {
       localStorage.removeItem(SESSION_STORAGE_KEY);
 
       queryClient.setQueryData(authQueryKey, null);
+
+      queryClient.removeQueries({
+        queryKey: ["cart"],
+      });
+
+      queryClient.removeQueries({
+        queryKey: ["orders"],
+      });
     },
   });
 }

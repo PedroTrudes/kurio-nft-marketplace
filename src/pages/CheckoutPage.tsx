@@ -1,10 +1,17 @@
 import { useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AxiosError } from "axios";
-import { ArrowLeft, LoaderCircle, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  LoaderCircle,
+  LockKeyhole,
+  ShieldCheck,
+} from "lucide-react";
 
 import Header from "@/components/layout/Header";
+import AuthModal from "@/components/auth/AuthModal";
 
+import { useAuth } from "@/features/auth/hooks/useAuth";
 import { useCart } from "@/features/cart/hooks/useCart";
 import { useCreateOrder } from "@/features/orders/hooks/useCreateOrder";
 
@@ -15,24 +22,43 @@ import type { OrderError } from "@/features/orders/types/order.types";
 export default function CheckoutPage() {
   const navigate = useNavigate();
 
-  const { data: cart, isLoading, isError } = useCart();
+  const {
+    data: user,
+    isPending: isAuthLoading,
+  } = useAuth();
+
+  const {
+    data: cart,
+    isLoading,
+    isError,
+  } = useCart();
 
   const createOrder = useCreateOrder();
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(
+    null,
+  );
 
   const idempotencyRef = useRef<{
     fingerprint: string;
     key: string;
   } | null>(null);
 
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const isAuthenticated = Boolean(user);
 
-  // Calculamos todos os valores utilizando a mesma
-  // regra de negócio utilizada pelo Order Store.
   const pricing = calculateOrderPricing(
     cart?.totalPrice ?? "0.00000000",
   );
 
   async function handleConfirmOrder() {
+    // Proteção adicional antes de iniciar a compra.
+    if (!isAuthenticated) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
     if (
       !cart ||
       cart.items.length === 0 ||
@@ -48,19 +74,12 @@ export default function CheckoutPage() {
       quantity,
     }));
 
-    // Identifica o conteúdo da compra.
-    // Ordenamos os itens para evitar diferenças
-    // causadas apenas pela ordem no carrinho.
     const fingerprint = JSON.stringify(
       [...items].sort((a, b) =>
         a.nftId.localeCompare(b.nftId),
       ),
     );
 
-    // Reutilizamos a chave quando o usuário tenta
-    // novamente a mesma compra.
-    //
-    // Se os itens mudarem, criamos uma nova chave.
     if (
       !idempotencyRef.current ||
       idempotencyRef.current.fingerprint !== fingerprint
@@ -128,15 +147,64 @@ export default function CheckoutPage() {
           </p>
         </div>
 
-        {isLoading ? (
-          <div className="flex min-h-60 items-center justify-center">
+        {isAuthLoading ? (
+          <div
+            role="status"
+            className="flex min-h-60 items-center justify-center gap-3 text-kurio-text-muted"
+          >
+            <LoaderCircle
+              size={24}
+              className="animate-spin text-kurio-primary"
+            />
+
+            Verificando autenticação...
+          </div>
+        ) : !isAuthenticated ? (
+          <section className="mx-auto max-w-lg rounded-2xl border border-kurio-border bg-kurio-surface px-6 py-10 text-center sm:px-10">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-kurio-primary/10 text-kurio-primary">
+              <LockKeyhole size={28} />
+            </div>
+
+            <h2 className="text-xl font-bold sm:text-2xl">
+              Entre para finalizar sua compra
+            </h2>
+
+            <p className="mt-4 text-sm leading-7 text-kurio-text-muted">
+              Para continuar com a compra, entre na sua conta
+              ou crie um cadastro. Seus NFTs permanecerão
+              salvos no carrinho.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => setIsAuthModalOpen(true)}
+              className="mt-8 flex h-12 w-full items-center justify-center rounded-lg bg-kurio-primary text-sm font-bold text-kurio-background transition-colors hover:bg-kurio-primary-hover"
+            >
+              Entrar ou criar conta
+            </button>
+
+            <Link
+              to="/cart"
+              className="mt-5 inline-block text-xs font-semibold text-kurio-primary hover:underline"
+            >
+              Voltar ao carrinho
+            </Link>
+          </section>
+        ) : isLoading ? (
+          <div
+            role="status"
+            className="flex min-h-60 items-center justify-center"
+          >
             <LoaderCircle
               size={28}
               className="animate-spin text-kurio-primary"
             />
           </div>
         ) : isError ? (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-300">
+          <div
+            role="alert"
+            className="rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-300"
+          >
             Não foi possível carregar seu carrinho.
           </div>
         ) : !cart || cart.items.length === 0 ? (
@@ -219,7 +287,6 @@ export default function CheckoutPage() {
               </h2>
 
               <div className="mt-7 space-y-4 border-b border-kurio-border pb-6 text-sm">
-           
                 <div className="flex items-center justify-between gap-3">
                   <span className="text-kurio-text-muted">
                     Subtotal
@@ -304,6 +371,11 @@ export default function CheckoutPage() {
           </div>
         )}
       </main>
+
+      <AuthModal
+        open={isAuthModalOpen}
+        onOpenChange={setIsAuthModalOpen}
+      />
     </div>
   );
 }

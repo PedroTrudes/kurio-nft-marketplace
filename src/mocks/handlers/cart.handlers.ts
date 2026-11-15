@@ -1,7 +1,4 @@
-import {
-  http,
-  HttpResponse,
-} from "msw";
+import { http, HttpResponse } from "msw";
 
 import {
   addCartItem,
@@ -25,7 +22,7 @@ function handleCartError(error: unknown) {
     message === "NFT não encontrado." ||
     message === "NFT não encontrado no carrinho."
       ? 404
-      : message.includes("estoque")
+      : message.toLowerCase().includes("estoque")
         ? 409
         : 400;
 
@@ -39,7 +36,6 @@ export const cartHandlers = [
   http.get("/api/cart", () => {
     return HttpResponse.json(getCart());
   }),
-
 
   http.post("/api/cart/items", async ({ request }) => {
     try {
@@ -63,13 +59,11 @@ export const cartHandlers = [
     "/api/cart/items/:nftId",
     async ({ params, request }) => {
       try {
-        const { nftId } = params;
-
         const body =
           (await request.json()) as UpdateCartItemInput;
 
         const cart = updateCartItem(
-          String(nftId),
+          String(params.nftId),
           body.quantity,
         );
 

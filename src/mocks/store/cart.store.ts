@@ -10,10 +10,48 @@ interface StoredCartItem {
   quantity: number;
 }
 
-const CART_STORAGE_KEY = "kurio-cart";
+const CART_STORAGE_PREFIX = "kurio-cart:";
+const GUEST_CART_KEY = `${CART_STORAGE_PREFIX}guest`;
+const SESSION_STORAGE_KEY = "kurio-auth-session";
 
 const PRICE_DECIMALS = 8;
 const PRICE_FACTOR = 10 ** PRICE_DECIMALS;
+
+function getSessionUserId(): string | null {
+  try {
+    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+
+    if (!stored) {
+      return null;
+    }
+
+    const session: unknown = JSON.parse(stored);
+
+    if (
+      typeof session === "object" &&
+      session !== null &&
+      "user" in session &&
+      typeof session.user === "object" &&
+      session.user !== null &&
+      "id" in session.user &&
+      typeof session.user.id === "string"
+    ) {
+      return session.user.id;
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function getCartStorageKey(): string {
+  const userId = getSessionUserId();
+
+  return userId
+    ? `${CART_STORAGE_PREFIX}${userId}`
+    : GUEST_CART_KEY;
+}
 
 function toPriceUnits(price: string): number {
   const [whole = "0", fraction = ""] = price.split(".");
@@ -32,7 +70,9 @@ function formatPriceUnits(units: number): string {
   return (units / PRICE_FACTOR).toFixed(PRICE_DECIMALS);
 }
 
-function isStoredCartItem(value: unknown): value is StoredCartItem {
+function isStoredCartItem(
+  value: unknown,
+): value is StoredCartItem {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -46,9 +86,11 @@ function isStoredCartItem(value: unknown): value is StoredCartItem {
   );
 }
 
-function readStoredItems(): StoredCartItem[] {
+function readStoredItems(
+  storageKey = getCartStorageKey(),
+): StoredCartItem[] {
   try {
-    const raw = localStorage.getItem(CART_STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
 
     if (!raw) {
       return [];
@@ -66,9 +108,12 @@ function readStoredItems(): StoredCartItem[] {
   }
 }
 
-function writeStoredItems(items: StoredCartItem[]): void {
+function writeStoredItems(
+  items: StoredCartItem[],
+  storageKey = getCartStorageKey(),
+): void {
   localStorage.setItem(
-    CART_STORAGE_KEY,
+    storageKey,
     JSON.stringify(items),
   );
 }
@@ -215,6 +260,54 @@ export function removeCartItem(nftId: string): Cart {
 
 export function clearCart(): Cart {
   writeStoredItems([]);
+
+  return getCart();
+}
+
+export function mergeGuestCart(userId: string): Cart {
+  if (!userId) {
+    throw new Error("Usuário inválido.");
+  }
+
+  const guestItems = readStoredItems(GUEST_CART_KEY);
+
+  const userCartKey = `${CART_STORAGE_PREFIX}${userId}`;
+
+  if (guestItems.length === 0) {
+    return getCart();
+  }
+
+  const userItems = readStoredItems(userCartKey);
+
+  const mergedItems = userItems.map((item) => ({
+    ...item,
+  }));
+
+  for (const guestItem of guestItems) {
+    const existingItem = mergedItems.find(
+      (item) => item.nftId === guestItem.nftId,
+    );
+
+    const newQuantity =
+      (existingItem?.quantity ?? 0) + guestItem.quantity;
+
+    assertAvailableStock(
+      guestItem.nftId,
+      newQuantity,
+    );
+
+    if (existingItem) {
+      existingItem.quantity = newQuantity;
+    } else {
+      mergedItems.push({
+        ...guestItem,
+      });
+    }
+  }
+
+  writeStoredItems(mergedItems, userCartKey);
+
+  localStorage.removeItem(GUEST_CART_KEY);
 
   return getCart();
 }
